@@ -23,6 +23,14 @@ void CALLBACK notifyEvent(sp_albumbrowse *result, void *userdata) {
 	SetEvent(userdata);
 }
 
+void CALLBACK notifyEvent(sp_artistbrowse *result, void *userdata) {
+	SetEvent(userdata);
+}
+
+void CALLBACK notifyEvent(sp_search *result, void *userdata) {
+	SetEvent(userdata);
+}
+
 class InputSpotify
 {
 	t_filestats m_stats;
@@ -97,9 +105,7 @@ public:
 				case SP_LINKTYPE_PLAYLIST: {
 					sp_playlist *playlist = sp_playlist_create(sess, link);
 					int count;
-					// XXX I don't know what we're waiting for here; sp_playlist_num_tracks returning 0 is undocumented,
-					// there's no sp_playlist_error() to return not ready..
-					// foobar can't cope with an empty entry, anyway, so we have to get something or error out
+
 					for (int retries = 0; retries < 50; ++retries) {
 						count = sp_playlist_num_tracks(playlist);
 						if (0 != count)
@@ -120,6 +126,61 @@ public:
 					sp_playlist_release(playlist);
 				} break;
 
+				case SP_LINKTYPE_ARTIST: {
+					sp_artist *artist = sp_link_as_artist(link);
+					HANDLE ev = CreateEvent(NULL, FALSE, FALSE, NULL);
+					sp_artistbrowse *browse = sp_artistbrowse_create(sess, sp_link_as_artist(link), SP_ARTISTBROWSE_FULL, &notifyEvent, ev);
+					while (WAIT_OBJECT_0 != WaitForSingleObject(ev, 200)) {
+						lock.dropAndReacquire(20);
+						if (p_abort.is_aborting()) {
+							CloseHandle(ev);
+							p_abort.check();
+						}
+					}
+					CloseHandle(ev);
+
+					const int count = sp_artistbrowse_num_tracks(browse);
+					if (0 == count)
+						throw exception_io_data("empty (or failed to load?) artist");
+
+					for (int i = 0; i < count; ++i) {
+						sp_track *track = sp_artistbrowse_track(browse, i);
+						sp_track_add_ref(track);
+						t.push_back(track);
+					}
+					sp_artistbrowse_release(browse);
+				} break;
+
+				case SP_LINKTYPE_SEARCH: {
+					std::string query = p_path;
+					query = query.substr(15, sizeof(p_path) - 15);
+
+					// spotify:search:
+
+					HANDLE ev = CreateEvent(NULL, FALSE, FALSE, NULL);
+					sp_search *browse = sp_search_create(sess, query.c_str(), 0, 200, 0, 10, 0, 10, 0, 20, SP_SEARCH_SUGGEST, &notifyEvent, ev);
+
+					while (WAIT_OBJECT_0 != WaitForSingleObject(ev, 200)) {
+						lock.dropAndReacquire(20);
+						if (p_abort.is_aborting()) {
+							CloseHandle(ev);
+							p_abort.check();
+						}
+					}
+					CloseHandle(ev);
+
+					const int count = sp_search_num_tracks(browse);
+					if (0 == count)
+						throw exception_io_data("empty (or failed to load?) search");
+
+					for (int i = 0; i < count; ++i) {
+						sp_track *track = sp_search_track(browse, i);
+						sp_track_add_ref(track);
+						t.push_back(track);
+					}
+					sp_search_release(browse);
+				} break;
+
 				case SP_LINKTYPE_TRACK: {
 					sp_track *ptr = sp_link_as_track(link);
 					sp_track_add_ref(ptr);
@@ -128,7 +189,7 @@ public:
 
 				default:
 					sp_link_release(link);
-					throw exception_io_data("Only track, playlist and album URIs are supported");
+					throw exception_io_data("Only artist, track, playlist and album URIs are supported");
 			}
 			sp_link_release(link);
 		}
