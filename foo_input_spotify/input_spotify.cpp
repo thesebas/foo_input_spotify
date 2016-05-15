@@ -222,8 +222,8 @@ public:
 		p_info.meta_add("ARTIST", sp_artist_name(sp_track_artist(tr, 0)));
 		p_info.meta_add("ALBUM", sp_album_name(sp_track_album(tr)));
 		p_info.meta_add("TITLE", sp_track_name(tr));
-		p_info.meta_add("TRACKNUMBER", sp_track_index(tr));
-		p_info.meta_add("DISCNUMBER", sp_track_disc(tr));
+		p_info.meta_add("TRACKNUMBER", pfc::format_int(sp_track_index(tr)));
+		p_info.meta_add("DISCNUMBER", pfc::format_int(sp_track_disc(tr)));
 	}
 
 	t_filestats get_file_stats( abort_callback & p_abort )
