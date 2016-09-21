@@ -224,6 +224,7 @@ public:
 		p_info.meta_add("TITLE", sp_track_name(tr));
 		p_info.meta_add("TRACKNUMBER", pfc::format_int(sp_track_index(tr)));
 		p_info.meta_add("DISCNUMBER", pfc::format_int(sp_track_disc(tr)));
+		p_info.meta_add("DURATION", pfc::format_int(sp_track_duration(tr)/1000));
 	}
 
 	t_filestats get_file_stats( abort_callback & p_abort )
